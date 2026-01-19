@@ -197,7 +197,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { title, token } = req.body || {};
+  const { title, token } = req.body;
 
   // CONFIG
   const maxItems = 30;
@@ -265,12 +265,12 @@ ${title}
 
     const startTime = performance.now();
     let i = 0;
-    const maxSteps = 3;
+    const maxSteps = 1;
 
     // AI Loop
     while (!isFinished && i < maxSteps) {
       const openai_res = await openai.createChatCompletion({
-        model: "gpt-4.1-mini",
+        model: "gpt-3.5-turbo",
         temperature: 0.4,
         messages,
         max_tokens: 1100
