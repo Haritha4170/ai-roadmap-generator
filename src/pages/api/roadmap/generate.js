@@ -189,8 +189,15 @@ import { backendServices } from "@/backend/services/services";
 import openAiInstance from "@/shared/helper/openai";
 
 export default async function handler(req, res) {
-  const title = req.query.title;
-  const token = req.query.token;
+  // ✅ Allow only POST
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      ok: false,
+      message: "Method not allowed. Use POST."
+    });
+  }
+
+  const { title, token } = req.body || {};
 
   // CONFIG
   const maxItems = 30;
@@ -198,68 +205,70 @@ export default async function handler(req, res) {
   const minLevels = 5;
   const debug = true;
 
-  if (!title) {
+  // ✅ Validate input
+  if (!title || typeof title !== "string") {
     return res.status(400).json({
       ok: false,
-      message: "bad request params"
+      message: "Missing or invalid title"
     });
   }
 
-  let isFinished = false;
+  try {
+    let isFinished = false;
 
-  const cats = await backendServices.getCategories();
-  const categoriesList = cats.items.map(item => item.title).join(" | ");
+    // Get categories
+    const cats = await backendServices.getCategories();
+    const categoriesList = cats.items
+      .map(item => item.title)
+      .join(" | ");
 
-  const findCatId = (title) => {
-     const found = cats.items.find(item => item.title === title?.trim());
+    const findCatId = (title) => {
+      const found = cats.items.find(
+        item => item.title === title?.trim()
+      );
       return found ? found.id : null;
-};
+    };
 
-  // PROMPT
-  const basePrompt = `
-based on my prompt, make an up-to-date roadmap.
+    // PROMPT
+    const basePrompt = `
+Based on my prompt, create an up-to-date learning roadmap.
 
-IMPORTANT RESPONSE RULES:
-- collapse response in one line, remove spaces and new lines
-- when finished send @finish at the end of result, not in JSON
-- all items must have a parent
-- root parent is 0
-- root item level is 0
-- no null titles
-- short and efficient titles
-- no extra descriptions
-- response JSON must be single layer (no nested items)
+IMPORTANT RULES:
+- Return response in ONE line JSON
+- End response with @finish (not inside JSON)
+- Every item must have a parent
+- Root item must have id 0 and level 0
+- Short titles only
+- No descriptions
+- No duplicate topics
+- Flat array only (no nested objects)
 
-Choose category from:
+Choose a category from:
 ${categoriesList}
-If not found, use "Other Category"
+If none match, use "Other Category"
 
 Sample:
 { "category":"...", "roadmap":[{"id":1,"level":1,"parent":0,"title":"..."}] }
 
 Rules:
-- minimum ${minLevels} levels
-- level 1 must have at least 3 items
-- minimum ${minItems} items
-- maximum ${maxItems} items
-- no duplicates
+- Minimum levels: ${minLevels}
+- Level 1 must have at least 3 items
+- Minimum total items: ${minItems}
+- Maximum total items: ${maxItems}
 
 Prompt:
 ${title}
 `;
 
-  const openai = openAiInstance(token);
+    const openai = openAiInstance(token);
+    const messages = [{ role: "user", content: basePrompt }];
 
-  const messages = [
-    { role: "user", content: basePrompt }
-  ];
+    const startTime = performance.now();
+    let i = 0;
+    const maxSteps = 3;
 
-  const startTime = performance.now();
-  let i = 0;
-  const maxSteps = 3;
-
-  while (!isFinished && i < maxSteps) {
-    try {
+    // AI Loop
+    while (!isFinished && i < maxSteps) {
       const openai_res = await openai.createChatCompletion({
         model: "gpt-4.1-mini",
         temperature: 0.4,
@@ -274,59 +283,71 @@ ${title}
           isFinished = true;
         }
 
-        const cleanText = text.replace("@finish", "").replace(/\n/g, "");
-        messages.push({ role: "assistant", content: cleanText });
+        const cleanText = text
+          .replace("@finish", "")
+          .replace(/\n/g, "");
+
+        messages.push({
+          role: "assistant",
+          content: cleanText
+        });
 
         if (debug) {
-          console.log(`step ${i}:`, cleanText);
+          console.log(`Step ${i}:`, cleanText);
         }
       }
-    } catch (e) {
-      return res.status(500).json({
-        ok: false,
-        message: e?.message || "OpenAI error"
-      });
+
+      i++;
     }
-    i++;
-  }
 
-  // Merge all AI output
-  messages.shift();
-  let ai_res = "";
-  for (const msg of messages) {
-    ai_res += msg.content;
-  }
+    // Merge AI output
+    messages.shift();
+    let ai_res = "";
+    for (const msg of messages) {
+      ai_res += msg.content;
+    }
 
-  // CLEAN & SAFETY
-  ai_res = ai_res.replace("@finish", "").trim();
+    // Clean output
+    ai_res = ai_res.replace("@finish", "").trim();
+    if (!ai_res.endsWith("}")) {
+      ai_res += "}";
+    }
 
-  if (!ai_res.endsWith("}")) {
-    ai_res += "}";
-  }
-
-  try {
+    // Parse JSON
     const obj = JSON.parse(ai_res);
 
     const categoryTitle = obj.category;
-    const catId = findCatId(categoryTitle) || findCatId("Other Category");
+    const catId =
+      findCatId(categoryTitle) || findCatId("Other Category");
 
-    let roadmap = obj.roadmap || [];
+    let roadmap = Array.isArray(obj.roadmap)
+      ? obj.roadmap
+      : [];
 
-    // Add root if missing
-    const rootIndex = roadmap.findIndex(item => item.id === 0);
+    // Ensure root exists
+    const rootIndex = roadmap.findIndex(
+      item => item.id === 0
+    );
+
     if (rootIndex === -1) {
       roadmap.push({
         id: 0,
         level: 0,
         parent: 0,
-        title: title
+        title
       });
     }
 
-    // Remove empty titles
-    roadmap = roadmap.filter(item => item?.title?.trim());
+    // Remove bad items
+    roadmap = roadmap.filter(
+      item => item?.title && item?.title.trim()
+    );
 
-    const code = (Math.random() + 1).toString(36).substring(5);
+    // Save roadmap
+    const code = (Math.random() + 1)
+      .toString(36)
+      .substring(5);
+
     const endTime = performance.now();
 
     await backendServices.saveRoadmap({
@@ -335,7 +356,9 @@ ${title}
       title,
       data: JSON.stringify(roadmap),
       prompt: basePrompt,
-      generate_time: Math.floor((endTime - startTime) / 1000)
+      generate_time: Math.floor(
+        (endTime - startTime) / 1000
+      )
     });
 
     return res.status(200).json({
@@ -346,11 +369,12 @@ ${title}
       }
     });
 
-  } catch (e) {
-    console.log("AI RAW OUTPUT:", ai_res);
+  } catch (err) {
+    console.error("Generate Error:", err);
+
     return res.status(500).json({
       ok: false,
-      message: "Invalid AI JSON format"
+      message: "AI generation failed or invalid JSON"
     });
   }
 }

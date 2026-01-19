@@ -6,10 +6,8 @@ class HomeService {
     return new Promise((resolve, reject) => {
       mainApi
         .post(HOME_API.CREATE_ROADMAP, {}, {
-          params:{
             token: token, 
             title: textOrder
-          }
         })
         .then((res) => {
           resolve(res.data);
