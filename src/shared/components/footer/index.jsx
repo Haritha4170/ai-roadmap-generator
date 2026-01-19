@@ -35,10 +35,20 @@ const Footer = () => {
                 </Link>
             </Row>
             <Spacer y={2} />
-            <Text className={"note"}>
-                We are using Open Ai GPT and do not refer to its data scientifically. The data is only collected by artificial intelligence.
+            <Text size={14} css={{ textAlign: "center", color: "$accents7" }}>
+                Built with:
+             </Text>
+             <Text size={14} css={{ textAlign: "center", color: "$accents8" }}>
+                Next.js • OpenAI API • Node.js • REST API • Git • Vercel
             </Text>
+            
+            <Spacer y={1} />
+            <Text className={"note"}>
+                We are using OpenAI GPT and do not refer to its data scientifically. The data is only collected by artificial intelligence
+            </Text>
+            
             <Spacer y={2} />
+
         </ComponentWithStyle>
     )
 };

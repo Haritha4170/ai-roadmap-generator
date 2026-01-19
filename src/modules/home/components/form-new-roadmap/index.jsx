@@ -45,7 +45,7 @@ const FormNewRoadmap = () => {
                     }}
                 >
                     <div className="formContainer">
-                        {
+                        {/* {
                             showToken &&
                             <TextField
                                 key="token"
@@ -56,7 +56,7 @@ const FormNewRoadmap = () => {
                                 bordered
                                 name="token"
                             />
-                        }
+                        } */}
                         <TextareaField
                             rows={6}
                             placeholder={example}
