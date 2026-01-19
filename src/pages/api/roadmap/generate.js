@@ -205,6 +205,9 @@ export default async function handler(req, res) {
   }
   const { title, token } = body || {};
 
+  REQUEST BODY: { title: "Java Developer", token: "..." }
+
+
 
   // CONFIG
   const maxItems = 30;
