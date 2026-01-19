@@ -197,7 +197,14 @@ export default async function handler(req, res) {
     });
   }
 
-  const { title, token } = req.body;
+  // const { title, token } = req.body;
+
+  let body = req.body;
+  if (typeof body === "string") {
+    body = JSON.parse(body);
+  }
+  const { title, token } = body || {};
+
 
   // CONFIG
   const maxItems = 30;
